@@ -1,0 +1,19 @@
+COUP ROYALE — QUICK START
+
+1. Install Node.js 22.9+ (Node 24 recommended).
+2. Extract this ZIP and open the coup-royale folder in VS Code.
+3. Open Terminal → New Terminal.
+4. Run: npm ci
+5. Run: npm run dev
+6. Open: http://localhost:5173
+7. Open three separate tabs, choose three different aliases,
+   create a room, and join that code from the other two tabs.
+8. Guests press Ready. The host presses Start.
+
+ONLINE PLAY
+The frontend deploys to Vercel and the game server to Render.
+Follow README.md for the exact settings and environment variables.
+No AI API key is required. The game is not deployed to your accounts yet.
+The free Render setup can lose rooms when it restarts; see README.md.
+
+Your supplied challenge-loss sound is already included.
