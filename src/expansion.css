@@ -46,3 +46,5 @@
 [data-theme=bright] .hero-copy>p,[data-theme=bright] .empty-tables p,[data-theme=bright] .empty-tables>span,[data-theme=bright] .rule-copy p,[data-theme=bright] .table-announcement>p{color:var(--muted)}
 [data-theme=bright] .table-announcement strong{color:var(--text)}
 [data-theme=bright] .danger-decision,[data-theme=bright] .danger-decision .muted{color:var(--danger)}
+/* Character cards keep their dark artwork and readable light captions in both themes. */
+[data-theme=bright] .character-card{--text:#f1eee6;color:#f1eee6}
