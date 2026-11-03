@@ -11,6 +11,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 export const alive = p => !!p?.cards?.some(c => !c.revealed);
 export const living = r => r.players.filter(alive);
 export const player = (r, id) => r.players.find(p => p.id === id);
+export const teammates = (r, a, b) => r.gameMode === 'teams' && !!a?.team && a.team === b?.team;
 export function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 export function event(r, type, text, extra = {}) {
   r.events.push({ id: ++r.seq, type, text, at: Date.now(), ...extra });
@@ -21,30 +22,39 @@ export function phase(r, type, extra = {}) {
   r.phase = { id: randomUUID(), type, deadline: Date.now() + duration, ...extra };
 }
 export function createRoom(code, host, options = {}) {
+  const teams = options.gameMode === 'teams';
+  let capacity = Math.max(teams ? 4 : 3, Math.min(teams ? 14 : 15, Math.floor(Number(options.maxPlayers)) || 6));
+  if (teams && capacity % 2) capacity--;
   return { code, title: options.title || `${host.name}'s table`, visibility: options.visibility === 'public' ? 'public' : 'private',
-    maxPlayers: Math.max(3, Math.min(6, Number(options.maxPlayers) || 6)), responseSeconds: [15, 20, 30].includes(Number(options.responseSeconds)) ? Number(options.responseSeconds) : 20,
-    hostId: host.id, players: [{ ...host, ready: false, coins: 0, cards: [] }], status: 'waiting',
+    gameMode: options.gameMode === 'teams' ? 'teams' : 'free', maxPlayers: capacity, responseSeconds: [15, 20, 30].includes(Number(options.responseSeconds)) ? Number(options.responseSeconds) : 20,
+    hostId: host.id, players: [{ ...host, team: options.gameMode === 'teams' ? 'A' : null, ready: false, coins: 0, cards: [] }], status: 'waiting',
     round: 0, seq: 0, events: [], chat: [], createdAt: Date.now(), updatedAt: Date.now(), phase: null, turnId: null, action: null, block: null, deck: [] };
 }
 export function start(r, actorId) {
   assert(actorId === r.hostId, 'Only the host can start the match.');
   assert(r.status !== 'playing', 'A match is already in progress.');
-  assert(r.players.length >= 3 && r.players.length <= r.maxPlayers, 'You need 3–6 players to start.');
+  assert(r.players.length >= 3 && r.players.length <= r.maxPlayers && r.players.length <= 15, 'You need 3–15 players within the table capacity to start.');
+  if (r.gameMode === 'teams') {
+    const a = r.players.filter(p => p.team === 'A'), b = r.players.filter(p => p.team === 'B');
+    assert(a.length >= 2 && a.length === b.length && a.length + b.length === r.players.length, 'Choose two equal teams of 2–7 players.');
+    r.players = a.flatMap((p, i) => [p, b[i]]);
+  }
   assert(r.players.every(p => p.connected), 'Wait for everyone to reconnect or remove offline players.');
   assert(r.players.every(p => p.id === r.hostId || p.ready), 'Everyone must be ready.');
-  r.deck = shuffle(ROLES.flatMap(role => Array.from({ length: 3 }, () => ({ id: randomUUID(), role, revealed: false }))));
+  r.deck = shuffle(ROLES.flatMap(role => Array.from({ length: 3 * Math.ceil(r.players.length / 6) }, () => ({ id: randomUUID(), role, revealed: false }))));
   for (const p of r.players) { p.coins = 2; p.cards = [r.deck.pop(), r.deck.pop()]; p.ready = false; }
-  r.status = 'playing'; r.round++; r.action = null; r.block = null; r.winnerId = null;
+  r.status = 'playing'; r.round++; r.action = null; r.block = null; r.winnerId = null; r.winnerTeam = null;
   r.turnId = r.players.some(p => p.id === r.lastWinnerId) ? r.lastWinnerId : r.players[randomInt(r.players.length)].id;
   event(r, 'deal', `Match ${r.round} begins. Trust no one.`);
   phase(r, 'turn');
 }
 function winner(r) {
   const survivors = living(r);
-  if (survivors.length > 1) return false;
+  if (survivors.length > 1 && (r.gameMode !== 'teams' || new Set(survivors.map(p => p.team)).size > 1)) return false;
+  r.winnerTeam = r.gameMode === 'teams' ? survivors[0]?.team || null : null;
   r.status = 'finished'; r.winnerId = survivors[0]?.id || null; r.lastWinnerId = r.winnerId;
   r.phase = null; r.action = null; r.block = null;
-  event(r, 'winner', survivors.length ? `${survivors[0].name} rules the table!` : 'The table is empty.', { winnerId: r.winnerId });
+  event(r, 'winner', survivors.length ? r.winnerTeam ? `Team ${r.winnerTeam} rules the table!` : `${survivors[0].name} rules the table!` : 'The table is empty.', { winnerId: r.winnerId, winnerTeam: r.winnerTeam });
   return true;
 }
 function finishTurn(r) {
@@ -87,7 +97,7 @@ function afterClaim(r) {
   const a = r.action;
   if (!a || !alive(player(r, a.actorId))) return finishTurn(r);
   let eligible = [];
-  if (a.kind === 'aid') eligible = living(r).filter(p => p.id !== a.actorId && !(a.blockedBy || []).includes(p.id) && !(a.blockPassed || []).includes(p.id)).map(p => p.id);
+  if (a.kind === 'aid') eligible = living(r).filter(p => p.id !== a.actorId && !teammates(r, p, player(r, a.actorId)) && !(a.blockedBy || []).includes(p.id) && !(a.blockPassed || []).includes(p.id)).map(p => p.id);
   else if (['steal', 'assassinate'].includes(a.kind) && alive(player(r, a.targetId))) eligible = [a.targetId];
   if (eligible.length) { r.block = null; phase(r, 'block', { eligible, passed: [] }); }
   else resolveAction(r);
@@ -133,13 +143,13 @@ export function move(r, id, cmd) {
     assert(p.coins >= (def.cost || 0), 'You do not have enough coins.');
     if (['steal', 'assassinate', 'coup'].includes(cmd.kind)) {
       const target = player(r, cmd.targetId);
-      assert(target && target.id !== id && alive(target), 'Choose a living opponent.');
+      assert(target && target.id !== id && alive(target) && !teammates(r, p, target), 'Choose a living opponent.');
     }
     p.coins -= def.cost || 0;
     r.action = { actorId: id, kind: cmd.kind, targetId: ['steal', 'assassinate', 'coup'].includes(cmd.kind) ? cmd.targetId : null, paid: def.cost || 0 };
     r.block = null;
     event(r, 'action', `${p.name} chooses ${def.label}${r.action.targetId ? ` against ${player(r, r.action.targetId).name}` : ''}${def.role ? `, claiming ${def.role}` : ''}.`, { actorId: id, kind: cmd.kind });
-    if (def.role) phase(r, 'challengeAction', { eligible: living(r).filter(q => q.id !== id).map(q => q.id), passed: [] });
+    if (def.role) phase(r, 'challengeAction', { eligible: living(r).filter(q => q.id !== id && !teammates(r, p, q)).map(q => q.id), passed: [] });
     else if (cmd.kind === 'aid') afterClaim(r);
     else resolveAction(r);
   } else if (cmd.type === 'pass') {
@@ -161,7 +171,7 @@ export function move(r, id, cmd) {
     r.action.blockedBy = [...(r.action.blockedBy || []), id];
     r.action.blockPassed = [...new Set([...(r.action.blockPassed || []), ...s.passed])];
     event(r, 'block', `${p.name} blocks with ${cmd.role}.`, { actorId: id, role: cmd.role });
-    phase(r, 'challengeBlock', { eligible: living(r).filter(q => q.id !== id).map(q => q.id), passed: [] });
+    phase(r, 'challengeBlock', { eligible: living(r).filter(q => q.id !== id && !teammates(r, p, q)).map(q => q.id), passed: [] });
   } else if (cmd.type === 'lose') {
     assert(s.type === 'lose' && s.playerId === id, 'You are not choosing a lost influence.');
     const card = p.cards.find(c => c.id === cmd.cardId && !c.revealed);
@@ -185,7 +195,7 @@ export function timeout(r) {
   if (s.type === 'turn') {
     const p = player(r, r.turnId);
     event(r, 'timeout', `${p.name}'s timer expired. An automatic action is taken.`);
-    move(r, p.id, { phaseId: s.id, type: 'action', kind: p.coins >= 10 ? 'coup' : 'income', targetId: r.players.slice(r.players.indexOf(p) + 1).concat(r.players.slice(0, r.players.indexOf(p))).find(alive)?.id });
+    move(r, p.id, { phaseId: s.id, type: 'action', kind: p.coins >= 10 ? 'coup' : 'income', targetId: r.players.slice(r.players.indexOf(p) + 1).concat(r.players.slice(0, r.players.indexOf(p))).find(q => alive(q) && !teammates(r, p, q))?.id });
   } else if (s.type === 'lose') move(r, s.playerId, { phaseId: s.id, type: 'lose', cardId: player(r, s.playerId).cards.find(c => !c.revealed).id });
   else if (s.type === 'exchange') move(r, s.playerId, { phaseId: s.id, type: 'exchange', cardIds: s.pool.slice(0, s.count).map(c => c.id) });
   else {
@@ -222,10 +232,10 @@ export function view(r, id) {
   assert(me, 'You are not seated at this table.');
   let s = r.phase ? { id: r.phase.id, type: r.phase.type, deadline: r.phase.deadline, eligible: r.phase.eligible, passed: r.phase.passed, playerId: r.phase.playerId, reason: r.phase.reason } : null;
   if (s?.type === 'exchange' && s.playerId === id) { s.pool = r.phase.pool; s.count = r.phase.count; }
-  return { code: r.code, title: r.title, visibility: r.visibility, maxPlayers: r.maxPlayers, responseSeconds: r.responseSeconds,
+  return { code: r.code, title: r.title, gameMode: r.gameMode || 'free', winnerTeam: r.winnerTeam || null, visibility: r.visibility, maxPlayers: r.maxPlayers, responseSeconds: r.responseSeconds,
     hostId: r.hostId, status: r.status, round: r.round, turnId: r.turnId, phase: s,
     action: r.action ? { actorId: r.action.actorId, kind: r.action.kind, targetId: r.action.targetId, paid: r.action.paid } : null, block: r.block, winnerId: r.winnerId, events: r.events, chat: r.chat,
-    players: r.players.map(p => ({ id: p.id, name: p.name, ready: p.ready, connected: p.connected,
+    players: r.players.map(p => ({ id: p.id, name: p.name, team: p.team || null, ready: p.ready, connected: p.connected,
       coins: p.id === id ? p.coins : null,
       cards: p.cards.map(c => p.id === id || c.revealed ? { id: c.id, role: c.role, revealed: c.revealed } : { revealed: false }) })),
     you: id, courtCount: r.deck.length };

@@ -36,7 +36,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
     rooms.delete(r.code);
     if (dataDir && existsSync(path.join(dataDir, `${r.code}.json`))) unlinkSync(path.join(dataDir, `${r.code}.json`));
   }
-  const lobby = () => [...rooms.values()].filter(r => r.visibility === 'public' && r.status === 'waiting' && r.players.length < r.maxPlayers && r.players.some(p => p.connected)).map(r => ({ code: r.code, title: r.title, players: r.players.length, maxPlayers: r.maxPlayers, responseSeconds: r.responseSeconds }));
+  const lobby = () => [...rooms.values()].filter(r => r.visibility === 'public' && r.status === 'waiting' && r.players.length < r.maxPlayers && r.players.some(p => p.connected)).map(r => ({ code: r.code, title: r.title, players: r.players.length, maxPlayers: r.maxPlayers, gameMode: r.gameMode || 'free', responseSeconds: r.responseSeconds }));
   function broadcast(r) {
     for (const p of r.players) {
       const sock = seats.get(`${r.code}:${p.id}`);
@@ -90,6 +90,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
       const name = clean(payload.name, 20); check(name, 'Enter your nickname.');
       check(!r.players.some(p => p.name.toLowerCase() === name.toLowerCase()), 'That nickname is already taken at this table.');
       const token = randomBytes(32).toString('hex'); const p = { id: randomUUID(), name, tokenHash: hash(token), connected: true, ready: false, coins: 0, cards: [] };
+      p.team = r.gameMode === 'teams' ? (r.players.filter(q => q.team === 'A').length <= r.players.filter(q => q.team === 'B').length ? 'A' : 'B') : null;
       r.players.push(p); attach(socket, r, p); event(r, 'joined', `${name} takes a seat.`); save(r); broadcast(r);
       return { token, code, playerId: p.id, state: view(r, p.id) };
     });
@@ -102,6 +103,14 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
     });
     on('room:ready', () => {
       const { r, p } = seated(socket); check(r.status !== 'playing', 'The match is in progress.'); p.ready = !p.ready; save(r); broadcast(r);
+    });
+    on('room:team', payload => {
+      const { r, p } = seated(socket);
+      check(r.status === 'waiting' && r.gameMode === 'teams', 'Teams can only be changed in a team lobby.');
+      check(['A', 'B'].includes(payload.team), 'Choose Team A or Team B.');
+      check(r.players.filter(q => q.id !== p.id && q.team === payload.team).length < 7, 'This team already has seven players.');
+      if (p.team !== payload.team) { p.team = payload.team; r.players.forEach(q => { q.ready = false; }); }
+      save(r); broadcast(r);
     });
     on('room:start', () => {
       const { r, p } = seated(socket); start(r, p.id); save(r); broadcast(r);
@@ -134,7 +143,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
       const { r, p } = seated(socket); check(p.id === r.hostId && r.status === 'finished', 'Only the host can reopen a finished table.');
       r.status = 'waiting'; r.phase = null; r.action = null; r.block = null;
       r.players = r.players.filter(q => q.tokenHash); r.players.forEach(q => { q.cards = []; q.coins = 0; q.ready = false; });
-      r.deck = []; r.winnerId = null; hostTransfer(r); save(r); broadcast(r);
+      r.deck = []; r.winnerId = null; r.winnerTeam = null; hostTransfer(r); save(r); broadcast(r);
     });
     socket.on('disconnect', () => {
       try {

@@ -25,7 +25,7 @@ function conserve(r) {
 }
 test('minimum three; all opponents ready and connected', () => {
   const r = createRoom('ABC234', { id: 'a', name: 'A', connected: true });
-  assert.throws(() => start(r, 'a'), /3–6/);
+  assert.throws(() => start(r, 'a'), /3–15/);
   r.players.push({ id: 'b', connected: true, ready: true }, { id: 'c', connected: false, ready: true });
   assert.throws(() => start(r, 'a'), /reconnect/);
   r.players[2].connected = true; r.players[2].ready = false;

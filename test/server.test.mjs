@@ -64,3 +64,47 @@ test('unapproved browser origins rejected for WebSocket upgrade', async t => {
   const { game, url } = await service(); t.after(async () => game.close());
   await assert.rejects(connect(url, { transports: ['websocket'], extraHeaders: { Origin: 'https://unapproved.example' }, timeout: 1500 }));
 });
+
+
+test('15 real clients fill expanded table and a sixteenth cannot join', async t => {
+  const { game, url } = await service(); const clients = [];
+  t.after(async () => { clients.forEach(s => s.disconnect()); await game.close(); });
+  for (let i = 0; i < 16; i++) clients.push(await connect(url));
+  const r = await call(clients[0], 'room:create', { name: 'Host15', maxPlayers: 15 });
+  for (let i = 1; i < 15; i++) {
+    assert.equal((await call(clients[i], 'room:join', { code: r.code, name: `Guest${i}` })).ok, true);
+    await call(clients[i], 'room:ready');
+  }
+  assert.equal((await call(clients[15], 'room:join', { code: r.code, name: 'Overflow' })).ok, false);
+  const playing = waitFor(clients[0], 'room:state', s => s.status === 'playing');
+  assert.equal((await call(clients[0], 'room:start')).ok, true);
+  const state = await playing; assert.equal(state.players.length, 15); assert.equal(state.courtCount, 15);
+  assert.equal(state.gameMode, 'free');
+});
+
+test('team changes validate membership, reset readiness and survive disk restore', async t => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'coup-teams-')); const first = await service({ dataDir });
+  const clients = await Promise.all(Array.from({ length: 4 }, () => connect(first.url)));
+  const r = await call(clients[0], 'room:create', { name: 'TeamHost', gameMode: 'teams', maxPlayers: 4 });
+  const credentials = [r];
+  for (let i = 1; i < 4; i++) credentials.push(await call(clients[i], 'room:join', { code: r.code, name: `TeamGuest${i}` }));
+  assert.equal((await call(clients[1], 'room:team', { team: 'C' })).ok, false);
+  await call(clients[2], 'room:ready');
+  const switched = waitFor(clients[0], 'room:state', s => s.players[0].team === 'B');
+  await call(clients[0], 'room:team', { team: 'B' });
+  assert.ok((await switched).players.every(p => !p.ready));
+  for (let i = 1; i < 4; i++) await call(clients[i], 'room:ready');
+  assert.equal((await call(clients[0], 'room:start')).ok, false);
+  await call(clients[0], 'room:team', { team: 'A' });
+  for (let i = 1; i < 4; i++) await call(clients[i], 'room:ready');
+  assert.equal((await call(clients[0], 'room:start')).ok, true);
+  assert.equal((await call(clients[0], 'room:team', { team: 'B' })).ok, false);
+  clients.forEach(s => s.disconnect()); await first.game.close();
+  const second = await service({ dataDir }); const s = await connect(second.url);
+  t.after(async () => { s.disconnect(); await second.game.close(); rmSync(dataDir, { recursive: true, force: true }); });
+  const resumed = await call(s, 'room:resume', { code: r.code, token: r.token });
+  assert.equal(resumed.ok, true); assert.equal(resumed.state.gameMode, 'teams');
+  assert.deepEqual(resumed.state.players.map(p => p.team), ['A', 'B', 'A', 'B']);
+  assert.equal(resumed.state.players[2].coins, null);
+  assert.deepEqual(resumed.state.players[2].cards, [{ revealed: false }, { revealed: false }]);
+});

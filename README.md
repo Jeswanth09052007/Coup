@@ -1,6 +1,16 @@
 # Coup Royale
 
-A complete, real multiplayer Coup game for **3–6 people**. React + Vite frontend, authoritative Node.js + Socket.IO backend. The frontend deploys to Vercel; the backend deploys to Render. No AI, music, or paid gameplay API is required.
+A complete, real multiplayer Coup game for **3–15 people**. React + Vite frontend, authoritative Node.js + Socket.IO backend. The frontend deploys to Vercel; the backend deploys to Render. No AI, music, or paid gameplay API is required.
+
+## New table options
+
+- **Normal / Bright Beta** in the header changes appearance and remembers your choice on this device.
+- **Free for all** supports 3–15 players. Select the table capacity when hosting.
+- **Team vs team** supports two equal teams, 2v2 through 7v7. Players join the smaller team automatically and can choose A or B in the waiting room. Team changes reset everyone's readiness. The host starts once teams are equal and all guests are ready.
+- Team turns are interleaved at the start. Attacks, challenges, and blocks are against opponents only. Cards and coin balances remain private even from teammates. The whole team wins when the opposing team has no living influence. After eliminations, turns continue through the surviving seats.
+- Expanded decks contain enough cards for every hand and an exchange. This is a larger-table house variant.
+- Challenge results keep the existing sounds and effects and show the supplied image: `public/images/bluff-caught.jpeg` for a caught bluff, `public/images/claim-true.png` for a proved claim.
+- No extra service, dependency, or environment variable is required. Existing Vercel and Render auto-deploy connections can deploy the changes from `main`. Both frontend and backend must finish deploying before using the new room options. A backend deployment can reset active tables on ephemeral hosting, as described below.
 
 ## Start locally
 
@@ -17,8 +27,8 @@ Open **http://localhost:5173**. There is no configuration required for local pla
 
 ## Included
 
-- Public room browser and private invitation codes/links; 3–6 seats with host controls.
-- Five character types, three cards each; two hidden cards and two coins per player.
+- Public room browser and private invitation codes/links; 3–15 seats with host controls.
+- Five character types; 3 copies each for 3–6 players, 6 each for 7–12, and 9 each for 13–15; two hidden cards and two coins per player.
 - Income, foreign aid, tax, steal, assassinate, exchange, and coup.
 - Separate challenge and block windows; character claims may be bluffs.
 - Correct influence selection, proof replacement, mandatory coups, double losses on failed assassination defenses, elimination, winner, and rematch.
@@ -94,7 +104,7 @@ Completely offline tables pause instead of simulating the entire game without pl
 
 ## Rules and timing
 
-The base rules follow the five-character Coup game. House changes: **minimum 3 players, hidden coin balances, and an unlimited bank**. Timers and host controls make the rules usable online.
+The base rules follow the five-character Coup game. House changes: **3–15 players in free for all, hidden coin balances, and an unlimited bank**. Timers and host controls make the rules usable online.
 
 - Each turn chooses exactly one action. No passing the main turn.
 - Character actions may be challenged by any other living player. Claims are automatically proved if the claimant has a matching live card. On proof, that card is shuffled into the court before drawing a random replacement; it may be drawn again.
