@@ -48,3 +48,26 @@
 [data-theme=bright] .danger-decision,[data-theme=bright] .danger-decision .muted{color:var(--danger)}
 /* Character cards keep their dark artwork and readable light captions in both themes. */
 [data-theme=bright] .character-card{--text:#f1eee6;color:#f1eee6}
+/* Teammate information and table results never cover the action controls. */
+.opponent.ally{border-color:#78a6cf55;background:#39749a10}
+.opponent.ally.current-turn{border-color:var(--gold)}
+.private-balance.shared-balance{color:var(--text);font-size:10px;flex-wrap:wrap;line-height:1.4}
+.leaderboard-panel{width:100%;margin-top:16px;min-width:0}
+.leaderboard-panel .public-head{padding:16px 18px;gap:8px;flex-wrap:wrap}
+.leaderboard-panel h3{display:flex;align-items:center;gap:8px}
+.leaderboard-note{font-size:10px;line-height:1.6;color:var(--muted);margin:12px 18px}
+.leaderboard-scroll{max-height:300px;overflow:auto;padding:0 12px;scrollbar-width:thin}
+.leaderboard-panel table{border-collapse:collapse;width:100%;font-size:11px;font-variant-numeric:tabular-nums}
+.leaderboard-panel td,.leaderboard-panel th{padding:10px 6px;text-align:right;border-bottom:1px solid var(--border)}
+.leaderboard-panel th:nth-child(2),.leaderboard-panel tbody th{text-align:left;overflow-wrap:anywhere;max-width:150px}
+.leaderboard-panel thead th{font-size:9px;color:var(--muted);font-weight:500}
+.leaderboard-panel tbody th{font-weight:500}
+.leaderboard-panel small{font-size:9px;color:var(--muted)}
+.leaderboard-panel tr.you{color:var(--gold)}
+.team-scores{display:flex;gap:10px;margin:12px 18px}
+.team-scores>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--border);padding:12px 8px;border-radius:8px}
+.team-scores strong{font-size:26px}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+[data-theme=bright] .opponent.ally{background:#edf4fa;border-color:#84a5c6}
+@media(min-width:561px) and (max-width:800px){.game-sidebar>.leaderboard-panel{grid-column:1/-1}}
+@media(max-width:560px){.private-balance.shared-balance{font-size:8px}.leaderboard-panel .public-head{padding:16px 18px}.leaderboard-panel{margin-top:0}.waiting-grid .leaderboard-panel{margin-top:16px}}

@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { recordResult, leaderboard } from './leaderboard.mjs';
 
 export const ROLES = ['Duke', 'Assassin', 'Captain', 'Ambassador', 'Contessa'];
 export const ACTIONS = {
@@ -41,6 +42,7 @@ export function start(r, actorId) {
   }
   assert(r.players.every(p => p.connected), 'Wait for everyone to reconnect or remove offline players.');
   assert(r.players.every(p => p.id === r.hostId || p.ready), 'Everyone must be ready.');
+  r.matchPlayers = r.players.map(({ id, name, team }) => ({ id, name, team }));
   r.deck = shuffle(ROLES.flatMap(role => Array.from({ length: 3 * Math.ceil(r.players.length / 6) }, () => ({ id: randomUUID(), role, revealed: false }))));
   for (const p of r.players) { p.coins = 2; p.cards = [r.deck.pop(), r.deck.pop()]; p.ready = false; }
   r.status = 'playing'; r.round++; r.action = null; r.block = null; r.winnerId = null; r.winnerTeam = null;
@@ -54,6 +56,7 @@ function winner(r) {
   r.winnerTeam = r.gameMode === 'teams' ? survivors[0]?.team || null : null;
   r.status = 'finished'; r.winnerId = survivors[0]?.id || null; r.lastWinnerId = r.winnerId;
   r.phase = null; r.action = null; r.block = null;
+  recordResult(r);
   event(r, 'winner', survivors.length ? r.winnerTeam ? `Team ${r.winnerTeam} rules the table!` : `${survivors[0].name} rules the table!` : 'The table is empty.', { winnerId: r.winnerId, winnerTeam: r.winnerTeam });
   return true;
 }
@@ -234,9 +237,9 @@ export function view(r, id) {
   if (s?.type === 'exchange' && s.playerId === id) { s.pool = r.phase.pool; s.count = r.phase.count; }
   return { code: r.code, title: r.title, gameMode: r.gameMode || 'free', winnerTeam: r.winnerTeam || null, visibility: r.visibility, maxPlayers: r.maxPlayers, responseSeconds: r.responseSeconds,
     hostId: r.hostId, status: r.status, round: r.round, turnId: r.turnId, phase: s,
-    action: r.action ? { actorId: r.action.actorId, kind: r.action.kind, targetId: r.action.targetId, paid: r.action.paid } : null, block: r.block, winnerId: r.winnerId, events: r.events, chat: r.chat,
+    action: r.action ? { actorId: r.action.actorId, kind: r.action.kind, targetId: r.action.targetId, paid: r.action.paid } : null, block: r.block, winnerId: r.winnerId, leaderboard: leaderboard(r), events: r.events, chat: r.chat,
     players: r.players.map(p => ({ id: p.id, name: p.name, team: p.team || null, ready: p.ready, connected: p.connected,
-      coins: p.id === id ? p.coins : null,
-      cards: p.cards.map(c => p.id === id || c.revealed ? { id: c.id, role: c.role, revealed: c.revealed } : { revealed: false }) })),
+      coins: p.id === id || teammates(r, me, p) ? p.coins : null,
+      cards: p.cards.map(c => p.id === id || teammates(r, me, p) || c.revealed ? { id: c.id, role: c.role, revealed: c.revealed } : { revealed: false }) })),
     you: id, courtCount: r.deck.length };
 }
