@@ -105,6 +105,28 @@ test('team changes validate membership, reset readiness and survive disk restore
   const resumed = await call(s, 'room:resume', { code: r.code, token: r.token });
   assert.equal(resumed.ok, true); assert.equal(resumed.state.gameMode, 'teams');
   assert.deepEqual(resumed.state.players.map(p => p.team), ['A', 'B', 'A', 'B']);
-  assert.equal(resumed.state.players[2].coins, null);
-  assert.deepEqual(resumed.state.players[2].cards, [{ revealed: false }, { revealed: false }]);
+  assert.equal(resumed.state.players[2].coins, 2);
+  assert.ok(resumed.state.players[2].cards.every(c => c.role && c.id));
+  assert.equal(resumed.state.players[1].coins, null);
+  assert.deepEqual(resumed.state.players[1].cards, [{ revealed: false }, { revealed: false }]);
+});
+
+test('team leaderboard reaches real sockets and survives a server restart after a finished match', async t => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'coup-board-')); const first = await service({ dataDir });
+  const clients = await Promise.all(Array.from({ length: 4 }, () => connect(first.url)));
+  const host = await call(clients[0], 'room:create', { name: 'ScoreHost', gameMode: 'teams', maxPlayers: 4 });
+  for (let i = 1; i < 4; i++) { await call(clients[i], 'room:join', { code: host.code, name: `ScoreGuest${i}` }); await call(clients[i], 'room:ready'); }
+  await call(clients[0], 'room:start');
+  const finished = waitFor(clients[0], 'room:state', state => state.status === 'finished');
+  await call(clients[1], 'room:leave'); await call(clients[3], 'room:leave');
+  const state = await finished;
+  assert.equal(state.winnerTeam, 'A'); assert.equal(state.leaderboard.matches, 1);
+  assert.equal(state.leaderboard.players.find(p => p.id === host.playerId).wins, 1);
+  clients.forEach(s => s.disconnect()); await first.game.close();
+  const second = await service({ dataDir }); const s = await connect(second.url);
+  t.after(async () => { s.disconnect(); await second.game.close(); rmSync(dataDir, { recursive: true, force: true }); });
+  const resumed = await call(s, 'room:resume', { code: host.code, token: host.token });
+  assert.deepEqual(resumed.state.leaderboard, state.leaderboard);
+  assert.equal((await call(s, 'room:lobby')).ok, true);
+  assert.equal(second.game.rooms.get(host.code).scores.matches, 1);
 });

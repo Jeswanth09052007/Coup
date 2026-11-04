@@ -66,7 +66,9 @@ test('all team sizes finish with a team winner, preserve privacy and reset on re
     const r = table(n, true);
     assert.deepEqual(r.players.map(p => p.team), Array.from({ length: n }, (_, i) => i % 2 ? 'B' : 'A'));
     const projected = view(r, 'p0'), ally = projected.players.find(p => p.id !== 'p0' && p.team === 'A');
-    assert.equal(ally.coins, null); assert.deepEqual(ally.cards, [{ revealed: false }, { revealed: false }]);
+    assert.equal(ally.coins, 2); assert.ok(ally.cards.every(c => c.role && c.id));
+    const enemy = projected.players.find(p => p.team === 'B');
+    assert.equal(enemy.coins, null); assert.deepEqual(enemy.cards, [{ revealed: false }, { revealed: false }]);
     let turns = 0;
     while (r.status === 'playing' && turns++ < 10000) { timeout(r); conservation(r, n); }
     assert.equal(r.status, 'finished');

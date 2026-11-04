@@ -7,7 +7,7 @@ A complete, real multiplayer Coup game for **3–15 people**. React + Vite front
 - **Normal / Bright Beta** in the header changes appearance and remembers your choice on this device.
 - **Free for all** supports 3–15 players. Select the table capacity when hosting.
 - **Team vs team** supports two equal teams, 2v2 through 7v7. Players join the smaller team automatically and can choose A or B in the waiting room. Team changes reset everyone's readiness. The host starts once teams are equal and all guests are ready.
-- Team turns are interleaved at the start. Attacks, challenges, and blocks are against opponents only. Cards and coin balances remain private even from teammates. The whole team wins when the opposing team has no living influence. After eliminations, turns continue through the surviving seats.
+- Team turns are interleaved at the start. Attacks, challenges, and blocks are against opponents only. Teammates can see each other’s current cards and coin balances; opponents cannot. The whole team wins when the opposing team has no living influence. After eliminations, turns continue through the surviving seats.
 - Expanded decks contain enough cards for every hand and an exchange. This is a larger-table house variant.
 - Challenge results keep the existing sounds and effects and show the supplied image: `public/images/bluff-caught.jpeg` for a caught bluff, `public/images/claim-true.png` for a proved claim.
 - No extra service, dependency, or environment variable is required. Existing Vercel and Render auto-deploy connections can deploy the changes from `main`. Both frontend and backend must finish deploying before using the new room options. A backend deployment can reset active tables on ephemeral hosting, as described below.
@@ -33,13 +33,14 @@ Open **http://localhost:5173**. There is no configuration required for local pla
 - Separate challenge and block windows; character claims may be bluffs.
 - Correct influence selection, proof replacement, mandatory coups, double losses on failed assassination defenses, elimination, winner, and rematch.
 - Previous winner starts the next match when still seated. First match starts randomly.
-- **Private coin balances**, as requested. Actions and coin transfers are public and may reveal clues about balances. The bank is unlimited.
-- Private exchange choices; only the exchanging player receives their options.
+- **Private coin balances** in individual games, shared within the team in team games. Actions and coin transfers are public and may reveal clues about balances. The bank is unlimited.
+- Private exchange choices; only the exchanging player receives the drawn options. Teammates see the held hand, updated after the exchange.
 - Card dealing, hover movement, flips, lost influence stamps, challenge reveals, and winner confetti.
 - Original SVG character illustrations; no external image service needed.
 - Original synthesized suspense and celebration sounds, plus the exact supplied loss clip at `public/audio/challenge-lost.mp3`.
 - Mute and volume controls; reduced motion support; laptop and phone layouts.
 - Table chat and game history. Eliminated players may stay and chat.
+- A leaderboard in the waiting room and game sidebar, with player wins/played for both modes and team totals for team games. Results belong to that room and persist across rematches and stored room snapshots. A removed/rejoining seat is a new player record.
 - Refresh/reconnect sessions, host migration, server timers, and room snapshots.
 
 ## Deploy the backend on Render
@@ -122,7 +123,11 @@ The base rules follow the five-character Coup game. House changes: **3–15 play
 
 ## Sounds
 
-First click/tap/keypress activates browser audio. Suspense plays when a challenge is called. On resolution, the supplied loss sound plays, followed by an original celebration jingle. All connected viewers hear the same result cues. A final winner gets a longer celebration. Users can mute or adjust volume from the header. Browsers can still restrict autoplay, especially inside embedded frames; play the deployed app directly for normal audio behavior.
+First click/tap/keypress activates browser audio. Suspense plays when a challenge is called. On both truthful claims and caught bluffs, in either game mode, the supplied loss sound plays followed by the original celebration jingle. The clip is decoded into the unlocked audio context, with HTML audio as a fallback. All connected viewers hear the same result cues. A final winner gets a longer celebration. Users can mute or adjust volume from the header. Browsers can still restrict autoplay, especially inside embedded frames; play the deployed app directly for normal audio behavior.
+
+## Leaderboard scope
+
+Leaderboards are per table and start recording completed matches from this update. Every participant gets one played match; the individual winner or every member of the winning team gets one win, including eliminated teammates. Results remain across rematches while the room exists. Old room snapshots without score fields start with an empty board. The same hosting persistence limits as rooms apply; this is not an account-based global ranking.
 
 ## Verification
 
