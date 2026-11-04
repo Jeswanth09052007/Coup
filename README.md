@@ -21,13 +21,14 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173**. There is no configuration required for local play. This command starts both the frontend and backend. To test on one laptop, use **three separate tabs**, choose a different nickname in each, create a room, and join its code from the other two. Guest players must click Ready; the host then starts the game. A refreshed tab restores its existing seat.
+Open **http://localhost:5173**. There is no configuration required for local play. This command starts both the frontend and backend. To test on one laptop, use **three separate tabs**, choose a different nickname in each, create a room, and join its code from the other two. Guest players must click Ready; the host then opens card selection. Every player chooses and confirms two face-down cards, then the match begins. A refreshed tab restores its existing seat.
 
 `npm run dev` requires the default backend port 3001 to be free. It accepts `-- --port 4173` to change the frontend port when needed. Development accepts proxied preview origins; the deployed backend strictly checks `CLIENT_ORIGINS`.
 
 ## Included
 
 - Public room browser and private invitation codes/links; 3–15 seats with host controls.
+- A face-down starting-hand selection in both modes: everyone gets a separately shuffled layout and chooses two cards from the shared deck. Confirmed cards cannot be claimed twice.
 - Five character types; 3 copies each for 3–6 players, 6 each for 7–12, and 9 each for 13–15; two hidden cards and two coins per player.
 - Income, foreign aid, tax, steal, assassinate, exchange, and coup.
 - Separate challenge and block windows; character claims may be bluffs.
@@ -102,6 +103,14 @@ Run **one backend instance**. File-backed rooms are not a multi-server database.
 Seat credentials use `sessionStorage`, so refreshing the same tab restores the seat. Closing the tab or clearing its session storage may make the seat unrecoverable. Don’t share a seat token; share the invite link. Leaving explicitly forfeits your influences and invalidates your seat token. A connection opened with an existing seat token replaces that seat’s previous connection.
 
 Completely offline tables pause instead of simulating the entire game without players. Once someone rejoins, an expired phase executes its timeout fallback. Empty waiting/finished rooms expire after about two hours; completely offline active matches expire after about 24 hours without activity, subject to hosting persistence.
+
+## Starting-hand selection
+
+The host starts a 60-second selection phase. Tables with 3–6 players show 15 face-down cards (3 of each character). Tables with 7–12 players use 30 cards and 13–15 use 45, preserving enough stock for every two-card hand and later exchanges.
+
+Every seat has its own shuffled order and private opaque selection handles. No card roles or physical IDs are sent with the face-down grid. Pick two distinct available slots and confirm; the server atomically reserves both cards. A simultaneous conflicting pick is rejected without taking either card, and the player can choose again. Remaining cards become the court once all hands are confirmed.
+
+Refreshing/reconnecting restores the same layout and confirmed hand while the room exists. Selection state also survives a server restart when room snapshots are on persistent storage. Unconfirmed highlights are local and may be cleared by refresh. At the deadline, only missing hands are selected automatically. Completely offline tables pause. Leaving explicitly during selection cancels the unstarted match and returns the remaining players to the waiting room without recording a leaderboard result. Teams cannot change, players cannot join or be kicked, and a second start is rejected during selection.
 
 ## Rules and timing
 

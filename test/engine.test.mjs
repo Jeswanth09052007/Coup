@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRoom, start, move, view, timeout, forfeit, living, ROLES } from '../server/engine.mjs';
+import { createRoom, start as beginSelection, move, view, timeout, forfeit, living, ROLES } from '../server/engine.mjs';
+const start = (room, id) => { beginSelection(room, id); if (room.status === 'selecting') timeout(room); };
 const room = (n = 3) => {
   const r = createRoom('ABC234', { id: 'p0', name: 'Jessie', connected: true });
   for (let i = 1; i < n; i++) r.players.push({ id: `p${i}`, name: `Player ${i}`, connected: true, ready: true });

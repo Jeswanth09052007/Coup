@@ -71,3 +71,36 @@
 [data-theme=bright] .opponent.ally{background:#edf4fa;border-color:#84a5c6}
 @media(min-width:561px) and (max-width:800px){.game-sidebar>.leaderboard-panel{grid-column:1/-1}}
 @media(max-width:560px){.private-balance.shared-balance{font-size:8px}.leaderboard-panel .public-head{padding:16px 18px}.leaderboard-panel{margin-top:0}.waiting-grid .leaderboard-panel{margin-top:16px}}
+/* Face-down selection uses card backs only: role data stays on the server. */
+.selection-main{max-width:1240px;margin:auto;padding:36px 32px 50px}
+.selection-title{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+.selection-title h1{font:400 40px Georgia,serif;margin:12px 0}
+.selection-title p{font-size:13px;margin-bottom:0}
+.selection-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
+.selection-panel .public-head{gap:12px;flex-wrap:wrap}
+.selection-note{font-size:12px;color:var(--muted);line-height:1.7;margin:16px 24px}
+.selection-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;padding:8px 24px 16px;max-height:620px;overflow:auto;scrollbar-width:thin}
+.choice-card{position:relative;aspect-ratio:5/7;min-width:0;padding:0;border:2px solid var(--border);border-radius:10px;background:transparent;overflow:hidden;box-shadow:0 3px 12px #0002}
+.choice-card .card-back{border-radius:8px}
+.choice-card:hover:not(:disabled){border-color:var(--gold)}
+.choice-card.picked{border-color:var(--gold);box-shadow:0 0 0 2px #dfbd7740}
+.choice-card:disabled{opacity:.55}
+.choice-card.taken{opacity:.25}
+.choice-number{position:absolute;left:7px;top:6px;font-size:11px;color:#e6c88a}
+.choice-selected{position:absolute;right:7px;top:7px;border-radius:50%;background:#dfbd77;color:#30271a;padding:2px;display:flex}
+.choice-taken{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:#fff;background:#0008}
+.selection-confirm{padding:8px 24px}
+.selection-confirm .form-note{line-height:1.7}
+.selected-hand{text-align:center;padding:24px}
+.selected-hand>svg{color:var(--green)}
+.selected-hand h2{font-family:Georgia,serif;font-weight:400}
+.selected-hand p{font-size:12px}
+.selection-hand{display:flex;justify-content:center;gap:12px;margin:20px 0}
+.selection-players{padding:4px 18px 14px}
+.selection-players>div{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.selection-players strong{color:var(--muted);font-size:10px;white-space:nowrap}
+.shared-selection{margin-top:16px}
+.shared-selection>div:not(.public-head){padding:12px 18px}
+.shared-selection p{font-size:12px;margin:0}
+@media(max-width:800px){.selection-layout{grid-template-columns:minmax(0,1fr)}.selection-sidebar{display:grid;grid-template-columns:1fr 1fr;gap:16px}.selection-sidebar .leaderboard-panel,.selection-sidebar .shared-selection{margin-top:0}.selection-title h1{font-size:32px}}
+@media(max-width:560px){.selection-main{padding:26px 16px 40px}.selection-title{align-items:flex-start}.selection-title h1{font-size:28px}.selection-title .eyebrow{font-size:8px}.selection-title p{font-size:11px}.selection-title .timer{white-space:nowrap}.selection-grid{gap:8px;padding:6px 12px 14px;max-height:480px}.selection-note{margin:14px;font-size:10px}.selection-confirm{padding:8px 14px}.selection-confirm .form-note{font-size:9px}.choice-number{font-size:9px;top:4px;left:4px}.choice-selected{right:3px;top:3px;padding:1px}.choice-selected svg{width:13px;height:13px}.choice-taken{font-size:9px}.selection-sidebar{grid-template-columns:1fr}.selected-hand{padding:18px}.selected-hand .character-card{width:120px;height:182px}.selected-hand .role-art{height:122px}}

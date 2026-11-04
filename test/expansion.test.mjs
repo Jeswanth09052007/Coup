@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRoom, start, move, timeout, forfeit, view, alive, ROLES } from '../server/engine.mjs';
+import { createRoom, start as beginSelection, move, timeout, forfeit, view, alive, ROLES } from '../server/engine.mjs';
+const start = (room, id) => { beginSelection(room, id); if (room.status === 'selecting') timeout(room); };
 
 function table(n, teams = false) {
   const r = createRoom('ABC234', { id: 'p0', name: 'P0', connected: true }, { maxPlayers: n, gameMode: teams ? 'teams' : 'free' });

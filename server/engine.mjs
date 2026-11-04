@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { recordResult, leaderboard } from './leaderboard.mjs';
+import { prepareSelection, selectionView, chooseHand, cancelSelection } from './hand-selection.mjs';
 
 export const ROLES = ['Duke', 'Assassin', 'Captain', 'Ambassador', 'Contessa'];
 export const ACTIONS = {
@@ -19,7 +20,7 @@ export function event(r, type, text, extra = {}) {
   r.events = r.events.slice(-100);
 }
 export function phase(r, type, extra = {}) {
-  const duration = ['turn', 'lose', 'exchange'].includes(type) ? 60000 : r.responseSeconds * 1000;
+  const duration = ['turn', 'lose', 'exchange', 'selectHands'].includes(type) ? 60000 : r.responseSeconds * 1000;
   r.phase = { id: randomUUID(), type, deadline: Date.now() + duration, ...extra };
 }
 export function createRoom(code, host, options = {}) {
@@ -33,7 +34,7 @@ export function createRoom(code, host, options = {}) {
 }
 export function start(r, actorId) {
   assert(actorId === r.hostId, 'Only the host can start the match.');
-  assert(r.status !== 'playing', 'A match is already in progress.');
+  assert(['waiting', 'finished'].includes(r.status), 'A match is already in progress.');
   assert(r.players.length >= 3 && r.players.length <= r.maxPlayers && r.players.length <= 15, 'You need 3–15 players within the table capacity to start.');
   if (r.gameMode === 'teams') {
     const a = r.players.filter(p => p.team === 'A'), b = r.players.filter(p => p.team === 'B');
@@ -44,9 +45,16 @@ export function start(r, actorId) {
   assert(r.players.every(p => p.id === r.hostId || p.ready), 'Everyone must be ready.');
   r.matchPlayers = r.players.map(({ id, name, team }) => ({ id, name, team }));
   r.deck = shuffle(ROLES.flatMap(role => Array.from({ length: 3 * Math.ceil(r.players.length / 6) }, () => ({ id: randomUUID(), role, revealed: false }))));
-  for (const p of r.players) { p.coins = 2; p.cards = [r.deck.pop(), r.deck.pop()]; p.ready = false; }
-  r.status = 'playing'; r.round++; r.action = null; r.block = null; r.winnerId = null; r.winnerTeam = null;
+  for (const p of r.players) { p.coins = 2; p.cards = []; p.ready = false; p.handSelected = false; }
+  r.status = 'selecting'; r.round++; r.action = null; r.block = null; r.winnerId = null; r.winnerTeam = null;
   r.turnId = r.players.some(p => p.id === r.lastWinnerId) ? r.lastWinnerId : r.players[randomInt(r.players.length)].id;
+  prepareSelection(r, shuffle);
+  event(r, 'selection', `Choose two face-down cards for match ${r.round}.`);
+  phase(r, 'selectHands');
+}
+function completeSelection(r) {
+  if (!r.players.every(p => p.handSelected)) return;
+  r.selectionLayouts = null; r.status = 'playing';
   event(r, 'deal', `Match ${r.round} begins. Trust no one.`);
   phase(r, 'turn');
 }
@@ -132,6 +140,15 @@ function challenge(r, challengerId, isBlock) {
   }
 }
 export function move(r, id, cmd) {
+  if (r.status === 'selecting') {
+    const p = player(r, id);
+    assert(p, 'You are not seated at this table.');
+    assert(cmd && cmd.phaseId === r.phase?.id, 'The game has moved on. Please try the current prompt.');
+    assert(cmd.type === 'selectCards', 'Choose your starting cards before playing.');
+    chooseHand(r, p, cmd.cardIds);
+    event(r, 'handSelected', `${p.name} has chosen two cards.`);
+    completeSelection(r); r.updatedAt = Date.now(); return;
+  }
   assert(r.status === 'playing', 'There is no live match.');
   const p = player(r, id);
   assert(p && alive(p), 'You are out of this match.');
@@ -193,6 +210,14 @@ export function move(r, id, cmd) {
   r.updatedAt = Date.now();
 }
 export function timeout(r) {
+  if (r.status === 'selecting' && r.phase?.type === 'selectHands') {
+    for (const p of r.players) {
+      if (p.handSelected) continue;
+      const tokens = selectionView(r, p.id).filter(slot => slot.available).slice(0, 2).map(slot => slot.id);
+      move(r, p.id, { type: 'selectCards', phaseId: r.phase.id, cardIds: tokens });
+    }
+    return;
+  }
   if (r.status !== 'playing' || !r.phase) return;
   const s = r.phase;
   if (s.type === 'turn') {
@@ -209,7 +234,11 @@ export function timeout(r) {
   }
 }
 export function forfeit(r, id) {
-  const p = player(r, id); if (!p || r.status !== 'playing' || !alive(p)) return;
+  const p = player(r, id); if (!p) return;
+  if (r.status === 'selecting') {
+    cancelSelection(r); event(r, 'selectionCancelled', `${p.name} left during selection. Ready up to start again.`); return;
+  }
+  if (r.status !== 'playing' || !alive(p)) return;
   // Return any borrowed exchange cards before eliminating an exchanging player.
   if (r.phase.type === 'exchange' && r.phase.playerId === id) {
     r.deck.push(...r.phase.pool.filter(c => !p.cards.some(x => x.id === c.id))); shuffle(r.deck);
@@ -236,9 +265,9 @@ export function view(r, id) {
   let s = r.phase ? { id: r.phase.id, type: r.phase.type, deadline: r.phase.deadline, eligible: r.phase.eligible, passed: r.phase.passed, playerId: r.phase.playerId, reason: r.phase.reason } : null;
   if (s?.type === 'exchange' && s.playerId === id) { s.pool = r.phase.pool; s.count = r.phase.count; }
   return { code: r.code, title: r.title, gameMode: r.gameMode || 'free', winnerTeam: r.winnerTeam || null, visibility: r.visibility, maxPlayers: r.maxPlayers, responseSeconds: r.responseSeconds,
-    hostId: r.hostId, status: r.status, round: r.round, turnId: r.turnId, phase: s,
+    handSelection: selectionView(r, id), hostId: r.hostId, status: r.status, round: r.round, turnId: r.turnId, phase: s,
     action: r.action ? { actorId: r.action.actorId, kind: r.action.kind, targetId: r.action.targetId, paid: r.action.paid } : null, block: r.block, winnerId: r.winnerId, leaderboard: leaderboard(r), events: r.events, chat: r.chat,
-    players: r.players.map(p => ({ id: p.id, name: p.name, team: p.team || null, ready: p.ready, connected: p.connected,
+    players: r.players.map(p => ({ id: p.id, name: p.name, team: p.team || null, handSelected: !!p.handSelected, ready: p.ready, connected: p.connected,
       coins: p.id === id || teammates(r, me, p) ? p.coins : null,
       cards: p.cards.map(c => p.id === id || teammates(r, me, p) || c.revealed ? { id: c.id, role: c.role, revealed: c.revealed } : { revealed: false }) })),
     you: id, courtCount: r.deck.length };

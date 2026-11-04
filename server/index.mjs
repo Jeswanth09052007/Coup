@@ -102,7 +102,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
       return { state: view(r, p.id) };
     });
     on('room:ready', () => {
-      const { r, p } = seated(socket); check(r.status !== 'playing', 'The match is in progress.'); p.ready = !p.ready; save(r); broadcast(r);
+      const { r, p } = seated(socket); check(['waiting', 'finished'].includes(r.status), 'The match is in progress.'); p.ready = !p.ready; save(r); broadcast(r);
     });
     on('room:team', payload => {
       const { r, p } = seated(socket);
@@ -123,7 +123,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
       r.chat.push({ id: randomUUID(), playerId: p.id, name: p.name, text, at: Date.now() }); r.chat = r.chat.slice(-60); save(r); broadcast(r);
     });
     on('room:kick', payload => {
-      const { r, p } = seated(socket); check(p.id === r.hostId && r.status !== 'playing', 'Only the host can remove players between matches.');
+      const { r, p } = seated(socket); check(p.id === r.hostId && ['waiting', 'finished'].includes(r.status), 'Only the host can remove players between matches.');
       check(payload.playerId !== p.id, 'Use Leave table to leave.');
       const target = r.players.find(q => q.id === payload.playerId); check(target, 'Player not found.');
       const other = seats.get(`${r.code}:${target.id}`);
@@ -132,6 +132,7 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
     });
     on('room:leave', () => {
       const { r, p } = seated(socket);
+      if (r.status === 'selecting') forfeit(r, p.id);
       if (r.status === 'playing') { forfeit(r, p.id); p.connected = false; p.tokenHash = ''; }
       else r.players = r.players.filter(q => q.id !== p.id);
       seats.delete(`${r.code}:${p.id}`); socket.data.code = null; hostTransfer(r);
@@ -142,8 +143,8 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
     on('room:lobby', () => {
       const { r, p } = seated(socket); check(p.id === r.hostId && r.status === 'finished', 'Only the host can reopen a finished table.');
       r.status = 'waiting'; r.phase = null; r.action = null; r.block = null;
-      r.players = r.players.filter(q => q.tokenHash); r.players.forEach(q => { q.cards = []; q.coins = 0; q.ready = false; });
-      r.deck = []; r.winnerId = null; r.winnerTeam = null; hostTransfer(r); save(r); broadcast(r);
+      r.players = r.players.filter(q => q.tokenHash); r.players.forEach(q => { q.cards = []; q.coins = 0; q.ready = false; q.handSelected = false; });
+      r.deck = []; r.selectionLayouts = null; r.winnerId = null; r.winnerTeam = null; hostTransfer(r); save(r); broadcast(r);
     });
     socket.on('disconnect', () => {
       try {
@@ -155,9 +156,9 @@ export function createGameServer({ dataDir = process.env.DATA_DIR || path.resolv
     for (const r of rooms.values()) {
       try {
         const offline = r.players.every(p => !p.connected), age = Date.now() - r.updatedAt;
-        if (offline && age > (r.status === 'playing' ? 24 * 3600000 : 2 * 3600000)) { deleteRoom(r); continue; }
+        if (offline && age > (['playing', 'selecting'].includes(r.status) ? 24 * 3600000 : 2 * 3600000)) { deleteRoom(r); continue; }
         // Pause fully offline games. Resume with the existing deadline on rejoin.
-        if (!offline && r.status === 'playing' && r.phase?.deadline <= Date.now()) { timeout(r); save(r); broadcast(r); }
+        if (!offline && ['playing', 'selecting'].includes(r.status) && r.phase?.deadline <= Date.now()) { timeout(r); save(r); broadcast(r); }
       } catch (e) { console.error('Room maintenance failed:', e.message); }
     }
     for (const [ip, times] of ipCreates) if (times.every(t => t < Date.now() - 3600000)) ipCreates.delete(ip);
